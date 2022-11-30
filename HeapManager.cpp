@@ -21,72 +21,29 @@ void *HeapManager::allocate(size_t size) {
         return map_allocate(ALIGNED_SIZE, ALLOC_SIZE)->get_memory_ptr();
     }
 
-    auto chunk_ptr = chunk_list_head;
-    while (chunk_ptr != nullptr) {
-        if (chunk_ptr->size >= size and chunk_ptr->is_free) {
+    auto new_chunk = get_available_free_chunk(size);
+
+    if (new_chunk != nullptr) {
 #if DEBUG
-            std::cout << "Chunk reused!" << std::endl;
+        std::cout << "Chunk reused!" << std::endl;
 #endif
-            chunk_ptr->is_free = false;
-            return chunk_ptr->get_memory_ptr();
+        new_chunk->is_free = false;
+    } else {
+        new_chunk = (chunk_t *) (sbrk(intptr_t(ALLOC_SIZE)));
+        if (new_chunk != nullptr) {
+            *new_chunk = chunk_t(ALIGNED_SIZE);
+            insert_chunk_in_list(new_chunk);
+        } else {
+#if DEBUG
+            std::cout << "Failed to alloc with sbrk! Trying mmapp alloc" << std::endl;
+#endif
+            return map_allocate(size, ALLOC_SIZE)->get_memory_ptr();
         }
-
-        if (chunk_ptr->next == nullptr)
-            break;
     }
 
-    chunk_ptr = (chunk_t *) (sbrk(intptr_t(ALLOC_SIZE)));
-
-    if (chunk_ptr == nullptr) {
-#if DEBUG
-        std::cout << "Failed to alloc with sbrk! Trying mmapp alloc" << std::endl;
-#endif
-        chunk_ptr = map_allocate(size, ALLOC_SIZE);
-    }
-
-    *chunk_ptr = chunk_t(ALIGNED_SIZE);
-    chunk_ptr->prev = chunk_list_head;
-
-    if (chunk_list_head == nullptr)
-        chunk_list_head = chunk_ptr;
-
-#if DEBUG
-    std::cout << "Chunk inserted in list!" << std::endl;
-#endif
-
-    return chunk_ptr->get_memory_ptr();
+    return new_chunk->get_memory_ptr();
 }
 
-size_t HeapManager::align_up(size_t num, size_t align) {
-    return (num + align - 1) & ~(align - 1);
-}
-
-size_t HeapManager::get_alloc_size(size_t size) {
-    return size + sizeof(chunk_t);
-}
-
-HeapManager::chunk_t *HeapManager::map_allocate(size_t size, size_t alloc_size) {
-    auto new_chunk = (chunk_t *) mmap(
-            nullptr, alloc_size, PROT_READ | PROT_WRITE,
-            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0
-    );
-
-    if (new_chunk == MAP_FAILED) {
-#if DEBUG
-        std::cout << "Chunk mapping failed!" << std::endl;
-#endif
-        return nullptr;
-    }
-
-    *new_chunk = chunk_t(size, true);
-
-#if DEBUG
-    std::cout << "Chunk mapping ok!" << std::endl;
-#endif
-
-
-    return new_chunk;
-}
 
 void HeapManager::free(void *ptr) {
     auto chunk_ptr = chunk_t::get_from_memory(ptr);
@@ -118,6 +75,75 @@ void HeapManager::free(void *ptr) {
     }
 }
 
+size_t HeapManager::align_up(size_t num, size_t align) {
+    return (num + align - 1) & ~(align - 1);
+}
+
+size_t HeapManager::get_alloc_size(size_t size) {
+    return size + sizeof(chunk_t);
+}
+
+HeapManager::chunk_t *HeapManager::map_allocate(size_t size, size_t alloc_size) {
+    auto new_chunk = (chunk_t *) mmap(
+            nullptr, alloc_size, PROT_READ | PROT_WRITE,
+            MAP_PRIVATE | MAP_ANONYMOUS, -1, 0
+    );
+
+    if (new_chunk == MAP_FAILED) {
+#if DEBUG
+        std::cout << "Chunk mapping failed!" << std::endl;
+#endif
+        return nullptr;
+    }
+
+    *new_chunk = chunk_t(size, true);
+
+#if DEBUG
+    std::cout << "Chunk mapping ok!" << std::endl;
+#endif
+
+    return new_chunk;
+}
+
+HeapManager::chunk_t *HeapManager::get_available_free_chunk(size_t size) {
+    auto current = chunk_list_head;
+
+    while (current != nullptr) {
+        if (current->is_free and current->size >= size)
+            return current;
+
+        current = current->next;
+    }
+
+    return nullptr;
+}
+
+void HeapManager::insert_chunk_in_list(HeapManager::chunk_t *new_chunk) {
+
+    chunk_t *previous = nullptr;
+    auto current = chunk_list_head;
+
+    while (current != nullptr and new_chunk->size > current->size) {
+        previous = current;
+        current = current->next;
+    }
+
+    if (previous == nullptr) {
+        chunk_list_head = new_chunk;
+    } else {
+        previous->next = new_chunk;
+        new_chunk->prev = previous;
+    }
+
+    if (current != nullptr) {
+        new_chunk->next = current;
+        current->prev = new_chunk;
+    }
+
+#if DEBUG
+    std::cout << "Chunk inserted in list!" << std::endl;
+#endif
+}
 
 HeapManager::chunk_t::chunk_t(size_t size, bool mapped)
         : size(size), next(nullptr), prev(nullptr), is_free(false), is_mapped(mapped) {}
@@ -131,14 +157,16 @@ HeapManager::chunk_t *HeapManager::chunk_t::get_from_memory(void *ptr) {
 }
 
 #if DEBUG
+
 void HeapManager::print_chunks_sizes() {
     auto current = chunk_list_head;
 
-    while (current != nullptr){
+    while (current != nullptr) {
         std::cout << current->size << ' ';
         current = current->next;
     }
 
     std::cout << std::endl;
 }
+
 #endif

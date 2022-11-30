@@ -43,7 +43,10 @@ private:
 
     static chunk_t* chunk_list_head;
 
-    // Возможно здесь будет подводный камень
+    static chunk_t *get_available_free_chunk(size_t size);
+
+    static void insert_chunk_in_list(chunk_t* new_chunk);
+
     static inline size_t align_up(size_t num, size_t align);
 
     static inline size_t get_alloc_size(size_t size);

@@ -9,3 +9,4 @@ set(SOURCES
 add_executable(CASE1 case1.cpp ${SOURCES})
 add_executable(CASE2 case2.cpp ${SOURCES})
 add_executable(CASE3 case3.cpp ${SOURCES})
+add_executable(CASE4 case4.cpp ${SOURCES})

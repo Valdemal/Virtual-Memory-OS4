@@ -40,4 +40,6 @@ int main() {
     HeapManager::free(arrs[0]);
     HeapManager::free(arrs[2]);
     HeapManager::free(arrs);
+
+    HeapManager::print_chunks_sizes();
 }
