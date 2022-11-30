@@ -15,6 +15,13 @@ public:
 
     static void free(void *ptr);
 
+#if DEBUG
+
+    static void print_chunks_sizes();
+
+#endif
+
+
 private:
     struct chunk_t {
         size_t size;
@@ -34,7 +41,7 @@ private:
         static inline chunk_t* get_from_memory(void *ptr);
     };
 
-    static chunk_t* chunk_head;
+    static chunk_t* chunk_list_head;
 
     // Возможно здесь будет подводный камень
     static inline size_t align_up(size_t num, size_t align);
